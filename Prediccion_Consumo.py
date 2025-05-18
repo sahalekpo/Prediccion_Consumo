@@ -10,72 +10,96 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import mean_squared_error, r2_score
+import tkinter as tk
+from tkinter.scrolledtext import ScrolledText
 
 # ==========================
-# 1️⃣ Cargar los datos
+# 🪟 Ventana emergente
+# ==========================
+def mostrar_ventana_texto(titulo, contenido):
+    ventana = tk.Tk()
+    ventana.title(titulo)
+    ventana.geometry("700x400")
+    texto = ScrolledText(ventana, font=("Consolas", 10))
+    texto.pack(fill="both", expand=True)
+    texto.insert(tk.END, contenido)
+    texto.configure(state='disabled')
+    ventana.mainloop()
+
+# ==========================
+# 1️⃣ Cargar datos
 # ==========================
 df = pd.read_csv("consumo_hogar.csv")
-
-# ==========================
-# 2️⃣ Análisis inicial
-# ==========================
-print("🔍 Información general:")
-print(df.info())
-
-print("\n📊 Estadísticas descriptivas:")
-print(df.describe())
-
-print("\n❓ Valores nulos por columna:")
-print(df.isnull().sum())
-
-# ==========================
-# 3️⃣ Limpieza de datos
-# ==========================
-
-# Imputar valores nulos con la media
-df.fillna(df.mean(), inplace=True)
-print("\n✅ Valores nulos imputados con la media.")
-
-# Guardar copia original para comparación si se desea después
 df_original = df.copy()
 
-# ==========================
-# Visualización de BOXPLOTS
-# ==========================
+descripcion = "🔍 INFORMACIÓN GENERAL\n" + str(df.info()) + "\n"
+descripcion += "\n📊 ESTADÍSTICAS DESCRIPTIVAS\n" + str(df.describe()) + "\n"
+descripcion += "\n❓ VALORES NULOS DETECTADOS\n" + str(df.isnull().sum())
+mostrar_ventana_texto("Paso 1: Análisis Inicial", descripcion)
 
-# 🔹 Boxplots de las variables que no cambian
+# ==========================
+# 2️⃣ Violinplots de imputación de nulos
+# ==========================
+df_before = df_original.copy()
+df_before['estado'] = 'Antes'
+df_after = df.copy()
+df_after.fillna(df_after.mean(), inplace=True)
+df_after['estado'] = 'Después'
+
+df_combined = pd.concat([df_before, df_after]).reset_index(drop=True)
+
+columnas = ['Temperatura', 'Personas', 'Electrodomesticos', 'Consumo_kWh']
+
+plt.figure(figsize=(12, 6))
+for i, col in enumerate(columnas):
+    plt.subplot(2, 2, i + 1)
+    sns.violinplot(data=df_combined, x='estado', y=col)
+    plt.title(f"{col}: Antes vs Después de imputar nulos")
+plt.tight_layout()
+plt.show()
+
+mensaje_nulos = "✅ Valores nulos imputados con la media. Comparación mostrada con violinplots para cada variable."
+mostrar_ventana_texto("Paso 2: Imputación de Nulos", mensaje_nulos)
+
+# ==========================
+# 3️⃣ Boxplots por variable (sin transformación)
+# ==========================
 variables_estables = ['Temperatura', 'Personas', 'Electrodomesticos']
 plt.figure(figsize=(12, 4))
 for i, col in enumerate(variables_estables):
     plt.subplot(1, 3, i + 1)
-    sns.boxplot(y=df[col])
+    sns.boxplot(y=df_after[col])
     plt.title(f"{col} (sin transformación)")
-plt.suptitle("Boxplots de variables sin transformación", fontsize=15)
+plt.suptitle("Boxplots de variables sin transformación", fontsize=14)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
 
-# 🔹 Boxplot de Consumo antes y después (log)
+# Boxplot de Consumo antes y después del log
 plt.figure(figsize=(10, 5))
-
 plt.subplot(1, 2, 1)
-sns.boxplot(y=df_original['Consumo_kWh'])
+sns.boxplot(y=df_after['Consumo_kWh'])
 plt.title("Consumo_kWh (Antes de log)")
-
+df_after['Consumo_kWh_log'] = np.log1p(df_after['Consumo_kWh'])
 plt.subplot(1, 2, 2)
-df['Consumo_kWh_log'] = np.log1p(df['Consumo_kWh'])
-sns.boxplot(y=df['Consumo_kWh_log'])
+sns.boxplot(y=df_after['Consumo_kWh_log'])
 plt.title("Consumo_kWh_log (Después de log)")
-
-plt.suptitle("Boxplots de Consumo antes y después de la transformación logarítmica", fontsize=15)
+plt.suptitle("Boxplots de Consumo antes y después del log", fontsize=14)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
 
 # ==========================
 # 4️⃣ Detección de outliers
 # ==========================
-z_scores = np.abs(stats.zscore(df['Consumo_kWh']))
-df['es_outlier'] = z_scores > 3
-print(f"\n⚠️ Outliers detectados en 'Consumo_kWh': {df['es_outlier'].sum()}")
+z_scores = np.abs(stats.zscore(df_after['Consumo_kWh']))
+df_after['es_outlier'] = z_scores > 3
+mensaje_consumo = f"""
+⚙️ TRANSFORMACIÓN LOG Y OUTLIERS
+
+- Se aplicó log1p a 'Consumo_KWh'
+- Se detectaron {df_after['es_outlier'].sum()} outliers mediante Z-score
+- Los outliers NO fueron eliminados, solo marcados
+"""
+mostrar_ventana_texto("Paso 3: Transformación y Outliers", mensaje_consumo)
 
 # ==========================
 # 5️⃣ Visualización exploratoria
@@ -84,48 +108,33 @@ variables = ['Temperatura', 'Personas', 'Electrodomesticos']
 plt.figure(figsize=(15, 4))
 for i, var in enumerate(variables):
     plt.subplot(1, 3, i + 1)
-    sns.scatterplot(data=df, x=var, y='Consumo_kWh_log', alpha=0.5)
-    plt.title(f'{var} vs Consumo_kWh_log (escala log)')
-    plt.xlabel(var)
-    plt.ylabel("Consumo_kWh_log")
+    sns.scatterplot(data=df_after, x=var, y='Consumo_kWh_log', alpha=0.5)
+    plt.title(f'{var} vs Consumo_kWh_log')
 plt.tight_layout()
 plt.show()
 
 # ==========================
-# 6️⃣ Preparar variables
+# 6️⃣ Preparación del modelo
 # ==========================
-X = df[['Temperatura', 'Personas', 'Electrodomesticos']]
-y_log = df['Consumo_kWh_log']  # objetivo en escala log
-y_real = df['Consumo_kWh']     # objetivo original para evaluación final
-
-# Dividir para modelado
+X = df_after[['Temperatura', 'Personas', 'Electrodomesticos']]
+y_log = df_after['Consumo_kWh_log']
+y_real = df_after['Consumo_kWh']
 X_train, X_test, y_train_log, y_test_log = train_test_split(X, y_log, test_size=0.2, random_state=42)
 _, _, y_train_real, y_test_real = train_test_split(X, y_real, test_size=0.2, random_state=42)
 
 # ==========================
-# 7️⃣ Regresión lineal
-# ==========================
-modelo_lineal = LinearRegression()
-modelo_lineal.fit(X_train, y_train_log)
-y_pred_log = modelo_lineal.predict(X_test)
-y_pred_real = np.expm1(y_pred_log)  # volver a escala original
-
-# Evaluación
-mse_lineal = mean_squared_error(y_test_real, y_pred_real)
-r2_lineal = r2_score(y_test_real, y_pred_real)
-
-print("\n📈 Modelo de Regresión Lineal (con log transformado)")
-for var, coef in zip(X.columns, modelo_lineal.coef_):
-    print(f" - {var}: {coef:.4f}")
-print(f"Intercepto: {modelo_lineal.intercept_:.4f}")
-print(f"MSE (escala original): {mse_lineal:.2f}")
-print(f"R²  (escala original): {r2_lineal:.4f}")
-
-# ==========================
-# 8️⃣ Regresión polinómica
+# 7️⃣ Modelado
 # ==========================
 resultados = []
 y_pred_poly_dict = {}
+
+modelo_lineal = LinearRegression()
+modelo_lineal.fit(X_train, y_train_log)
+y_pred_log = modelo_lineal.predict(X_test)
+y_pred_real = np.expm1(y_pred_log)
+mse_lineal = mean_squared_error(y_test_real, y_pred_real)
+r2_lineal = r2_score(y_test_real, y_pred_real)
+resultados.append({'Modelo': 'Lineal', 'MSE': mse_lineal, 'R2': r2_lineal})
 
 for grado in [2, 3]:
     poly = PolynomialFeatures(degree=grado, include_bias=False)
@@ -142,98 +151,41 @@ for grado in [2, 3]:
     r2 = r2_score(y_test_real_p, y_pred_real_poly)
 
     y_pred_poly_dict[grado] = (y_test_real_p, y_pred_real_poly)
-
     resultados.append({
         'Modelo': f'Polinómico grado {grado}',
         'MSE': mse,
         'R2': r2
     })
 
-    print(f"\n📈 Modelo Polinómico grado {grado} (con log transformado)")
-    print(f"MSE (escala original): {mse:.2f}")
-    print(f"R²  (escala original): {r2:.4f}")
-
 # ==========================
-# 9️⃣ Comparación de modelos
+# 8️⃣ Gráficas de predicción vs. real
 # ==========================
-resultados.insert(0, {'Modelo': 'Lineal', 'MSE': mse_lineal, 'R2': r2_lineal})
-df_resultados = pd.DataFrame(resultados)
-print("\n📊 Comparación de Modelos (en escala original):")
-print(df_resultados)
-
-# ==========================
-# 🔟 Gráficos Real vs Predicho
-# ==========================
-# Lineal
 plt.figure(figsize=(6, 6))
 sns.scatterplot(x=y_test_real, y=y_pred_real, alpha=0.5)
 plt.plot([y_test_real.min(), y_test_real.max()], [y_test_real.min(), y_test_real.max()], '--r')
 plt.xlabel("Consumo Real")
 plt.ylabel("Consumo Predicho")
-plt.title("🔍 Lineal: Real vs Predicho (escala original)")
+plt.title("Lineal: Real vs Predicho (escala original)")
 plt.tight_layout()
 plt.show()
 
-# Polinómicos
 for grado, (y_real_p, y_pred_p) in y_pred_poly_dict.items():
     plt.figure(figsize=(6, 6))
     sns.scatterplot(x=y_real_p, y=y_pred_p, alpha=0.5)
     plt.plot([y_real_p.min(), y_real_p.max()], [y_real_p.min(), y_real_p.max()], '--r')
     plt.xlabel("Consumo Real")
     plt.ylabel("Consumo Predicho")
-    plt.title(f"📊 Polinómico grado {grado}: Real vs Predicho (escala original)")
+    plt.title(f"Polinómico grado {grado}: Real vs Predicho")
     plt.tight_layout()
     plt.show()
 
-import tkinter as tk
-from tkinter.scrolledtext import ScrolledText
-
 # ==========================
-# 11️⃣ Mostrar resumen final en ventana
+# 9️⃣ Resumen final
 # ==========================
-
-def mostrar_reporte_en_ventana(texto):
-    ventana = tk.Tk()
-    ventana.title("Resumen del procesamiento y modelado")
-    ventana.geometry("900x600")
-
-    cuadro_texto = ScrolledText(ventana, font=("Consolas", 10))
-    cuadro_texto.pack(fill="both", expand=True)
-    cuadro_texto.insert(tk.END, texto)
-    cuadro_texto.configure(state='disabled')
-
-    ventana.mainloop()
-
-# Construir texto de resumen
-reporte = []
-reporte.append("🧾 RESUMEN DEL PROCESAMIENTO Y MODELADO")
-reporte.append("=" * 50)
-reporte.append("\n🔍 Información general:")
-reporte.append(str(df.info()))
-
-reporte.append("\n📊 Estadísticas descriptivas:")
-reporte.append(str(df.describe()))
-
-reporte.append("\n❓ Valores nulos por columna antes de imputar:")
-nulos = df_original.isnull().sum()
-for col, cant in nulos.items():
-    if cant > 0:
-        reporte.append(f" - {col}: {cant} valores nulos")
-
-reporte.append("\n✅ Valores nulos imputados con la media.")
-
-reporte.append(f"\n⚠️ Outliers detectados en 'Consumo_kWh': {df['es_outlier'].sum()} (no eliminados, solo detectados)")
-
-reporte.append("\n🔁 Transformación aplicada:")
-reporte.append(" - Se aplicó log1p sobre 'Consumo_kWh'")
-reporte.append(" - Se entrenó el modelo en escala logarítmica y se evaluó en escala original.")
-
-reporte.append("\n📊 Métricas finales (escala original):")
-for index, fila in df_resultados.iterrows():
-    reporte.append(f" - {fila['Modelo']}: MSE = {fila['MSE']:.2f}, R² = {fila['R2']:.4f}")
-
-reporte.append("\n✅ Todo el proceso se ha ejecutado correctamente.")
-
-# Mostrar ventana
-mostrar_reporte_en_ventana("\n".join(reporte))
-
+resumen = "🧾 RESUMEN FINAL DEL MODELADO\n"
+resumen += "="*45 + "\n"
+resumen += "\n📊 MÉTRICAS DE LOS MODELOS (ESCALA ORIGINAL):\n"
+for r in resultados:
+    resumen += f" - {r['Modelo']}: MSE = {r['MSE']:.2f}, R² = {r['R2']:.4f}\n"
+resumen += "\n✅ Proceso ejecutado correctamente."
+mostrar_ventana_texto("Paso 4: Resultados Finales", resumen)
