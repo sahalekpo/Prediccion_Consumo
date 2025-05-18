@@ -31,10 +31,14 @@ print(df.isnull().sum())
 # ==========================
 # 3️⃣ Limpieza de datos
 # ==========================
+
 # Imputar valores nulos con la media
 df.fillna(df.mean(), inplace=True)
 
-# Visualizar boxplots antes de limpieza completa
+# Guardar copia original para comparación si se desea después
+df_original = df.copy()
+
+# Visualizar boxplots antes de limpieza de outliers
 plt.figure(figsize=(12, 4))
 for i, col in enumerate(df.columns):
     plt.subplot(1, 4, i + 1)
@@ -43,12 +47,13 @@ for i, col in enumerate(df.columns):
 plt.tight_layout()
 plt.show()
 
-# Reemplazar outliers en Consumo_kWh con el promedio (no eliminar)
-z_scores = np.abs(stats.zscore(df['Consumo_kWh']))
-consumo_promedio = df['Consumo_kWh'][(z_scores < 3)].mean()
-df.loc[z_scores >= 3, 'Consumo_kWh'] = consumo_promedio
+# Reemplazar outliers en TODAS las columnas con la MEDIANA
+for col in df.columns:
+    z_scores = np.abs(stats.zscore(df[col]))
+    mediana = df[col][z_scores < 3].median()
+    df.loc[z_scores >= 3, col] = mediana
 
-# Visualizar boxplots después
+# Visualizar boxplots después de limpiar outliers
 plt.figure(figsize=(12, 4))
 for i, col in enumerate(df.columns):
     plt.subplot(1, 4, i + 1)
@@ -56,10 +61,6 @@ for i, col in enumerate(df.columns):
     plt.title(f"{col} (después)")
 plt.tight_layout()
 plt.show()
-
-# Verificación
-print(f"\n📦 DataFrame limpio: {df.shape[0]} registros")
-print(df.isnull().sum())
 
 # ==========================
 # 4️⃣ Visualización exploratoria
